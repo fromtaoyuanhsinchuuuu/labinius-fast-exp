@@ -406,9 +406,11 @@ fn prefetch_witness_on() -> bool {
     })
 }
 
-/// Bring `bytes` of the witness table into the cache: the commitment reads it in 2 KB
-/// chunks whose neighbours are 256 KB away, a pattern the hardware prefetchers do not
-/// follow across pages.
+/// Bring the first line of every page of `bytes` of the witness table into the cache: the
+/// commitment reads it in 2 KB chunks whose neighbours are 256 KB away, a pattern the
+/// hardware prefetchers do not follow across pages. Only the page starts are touched: the
+/// L2 streamer picks up the rest of a page after the first miss, and prefetching every line
+/// of every chunk costs more instructions than the misses it saves.
 #[inline(always)]
 fn prefetch_witness(ptr:*const crate::fields::scalar::B128,bytes:usize){
  #[cfg(target_arch="x86_64")]
@@ -416,7 +418,7 @@ fn prefetch_witness(ptr:*const crate::fields::scalar::B128,bytes:usize){
   use core::arch::x86_64::*;
   let base=ptr as *const i8;
   let mut off=0usize;
-  while off<bytes{_mm_prefetch::<{_MM_HINT_T0}>(base.add(off));off+=64;}
+  while off<bytes{_mm_prefetch::<{_MM_HINT_T0}>(base.add(off));off+=4096;}
  }
 }
 
