@@ -89,6 +89,7 @@ jobs:
           lscpu | grep -E "Thread|Core|Socket|Model name" || true
           cat /sys/devices/system/cpu/cpu*/topology/thread_siblings_list 2>/dev/null | sort -u | tr '\n' ' ' || true
           echo
+          echo
           df -T "$RUNNER_TEMP" | tail -1
           cat > /tmp/avx512probe.c <<'PROBE'
           #include <immintrin.h>
@@ -116,7 +117,7 @@ jobs:
               | sudo tee /opt/cargo/bin/rustc >/dev/null
             sudo chmod 755 /opt/cargo/bin/rustc
           fi
-          /opt/cargo/bin/rustc --print cfg -C target-cpu=native | grep -c avx512f
+          /opt/cargo/bin/rustc --print cfg -C target-cpu=native | grep -c avx512f || true
 
       - name: Setup
         shell: bash
