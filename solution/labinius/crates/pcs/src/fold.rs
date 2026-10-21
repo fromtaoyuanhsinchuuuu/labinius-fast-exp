@@ -2023,10 +2023,10 @@ mod bitsliced {
             // Zero everywhere the columns do not write: the guards and the padding pair.
             let mut planes = vec![zero; GUARD + GROUP * STRIDE];
             let mut acc = vec![zero; 2 * PAIRS * BITS];
-            // One counts buffer per worker. `unslice` writes every lane, so the
-            // buffer never has to be cleared, and a task that owns the whole
-            // block writes straight out of it.
-            let mut counts = vec![[0i16; LANES]; SLOTS];
+            // One counts buffer per worker, for the case where a task owns a whole
+            // block: `unslice` writes every lane, so the buffer never has to be
+            // cleared, and the task writes straight out of it.
+            let mut counts = if parts == 1 { vec![[0i16; LANES]; SLOTS] } else { Vec::new() };
             loop {
                 let task = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if task >= tasks {
