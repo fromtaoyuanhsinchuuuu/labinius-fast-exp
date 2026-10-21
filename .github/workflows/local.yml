@@ -99,7 +99,7 @@ jobs:
             __m512i b = _mm512_add_epi32(a, a);
             int out[16];
             _mm512_storeu_si512(out, b);
-            printf("avx512-ok %d\n", out[0]);
+            printf("AVXPROBE-OK %d\n", out[0]);
             return 0;
           }
           PROBE
