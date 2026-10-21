@@ -965,7 +965,7 @@ const COMMIT_WORKERS: usize = 4;
 /// a host of two-thread cores the two threads of a core take the halves of each 32-column group,
 /// so each batch of the arranged keys, 168 KB, is read from L3 once per 32 columns; 32 per
 /// worker measured 1.8 ms slower (L2 pressure).
-const HYBRID_GROUP: usize = 32;
+const HYBRID_GROUP: usize = 16;
 /// The group size the commitment runs with: columns per worker, which sets how much
 /// of the arranged key is reused from L2 and how large the accumulators get.
 fn hybrid_group() -> usize {

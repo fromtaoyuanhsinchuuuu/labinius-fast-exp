@@ -153,6 +153,25 @@ jobs:
             done
           done
 
+      - name: Profile with hardware counters
+        shell: bash
+        run: |
+          set -uo pipefail
+          T=$(mktemp -d)
+          export LABINIUS_SEED=$(openssl rand -hex 32)
+          "$RUNNER_TEMP/labinius-trusted/labinius-fast-verify" --write-table "$T/table.bin"
+          PROVER="$RUNNER_TEMP/labinius-contestant/solution/proof_generate/target/release/labinius-fast"
+          if ! command -v perf >/dev/null; then
+            sudo apt-get install -y -qq linux-tools-generic >/dev/null 2>&1 || true
+          fi
+          command -v perf || echo "no perf"
+          echo "=== perf stat ==="
+          perf stat -e task-clock,cycles,instructions,cache-references,cache-misses,branches,branch-misses,minor-faults,major-faults \
+            "$PROVER" --prove "$T/proof.bin" --table "$T/table.bin" 2>&1 | tail -25
+          echo "=== flat profile (whole prover) ==="
+          perf record -F 999 -o "$T/perf.data" -- "$PROVER" --prove "$T/proof.bin" --table "$T/table.bin" >/dev/null 2>&1
+          perf report -i "$T/perf.data" --stdio --percent-limit 0.4 2>/dev/null | head -40 || true
+
       - name: Benchmark
         shell: bash
         env:
