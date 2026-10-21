@@ -2001,8 +2001,15 @@ mod bitsliced {
         // Tasks are (block, part of the column groups), handed out dynamically so a busy or
         // shared core does fewer of them; the second part of a block to finish adds its counts
         // to the first's (counts are additive and stay within the total weight) and writes.
+        // Parts of the column groups a block is split over. One part keeps the whole
+        // block in one task: no second thread to hand the counts to, and no merge.
         const PARTS: usize = 2;
-        let parts = PARTS.min(groups.len().max(1));
+        let parts = match std::env::var("LABINIUS_FOLD_PARTS") {
+            Ok(v) => v.parse::<usize>().unwrap_or(PARTS),
+            Err(_) => PARTS,
+        }
+        .max(1)
+        .min(groups.len().max(1));
         let cuts: Vec<usize> = (0..=parts).map(|i| groups.len() * i / parts).collect();
         let tasks = blocks * parts;
         let pending: Vec<std::sync::Mutex<Vec<Vec<[i16; LANES]>>>> =
@@ -2016,6 +2023,10 @@ mod bitsliced {
             // Zero everywhere the columns do not write: the guards and the padding pair.
             let mut planes = vec![zero; GUARD + GROUP * STRIDE];
             let mut acc = vec![zero; 2 * PAIRS * BITS];
+            // One counts buffer per worker. `unslice` writes every lane, so the
+            // buffer never has to be cleared, and a task that owns the whole
+            // block writes straight out of it.
+            let mut counts = vec![[0i16; LANES]; SLOTS];
             loop {
                 let task = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if task >= tasks {
@@ -2048,13 +2059,17 @@ mod bitsliced {
                         );
                     }
                 }
-                let mut counts = vec![[0i16; LANES]; SLOTS];
                 for s in 0..SLOTS {
                     unslice(acc.as_ptr().add(s * BITS), &mut counts[s]);
                 }
+                if parts == 1 {
+                    let output = (out_addr as *mut RingElement).add(block * (LANES / 4));
+                    write_counts(&counts, bias, output);
+                    continue;
+                }
                 let mut done = {
                     let mut v = pending[block].lock().unwrap();
-                    v.push(counts);
+                    v.push(std::mem::take(&mut counts));
                     if v.len() < parts {
                         continue;
                     }
