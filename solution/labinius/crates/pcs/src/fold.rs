@@ -1367,10 +1367,13 @@ mod bitsliced {
     /// Columns per group: 16 * 129 planes, 132 KB per worker (measured on the full instance:
     /// 19.8 ms at 16 columns, 19.9 at 12 and 20, 20.0 at 24, 20.6 at 31, 21.6 at 63). The
     /// planes of a group (`GUARD + COL_GROUP * STRIDE`) must keep the qword offsets in u16.
-    const COL_GROUP: usize = 16;
-    /// The group size the fold runs with: columns per group, i.e. how many of the
-    /// table's 256 KB-apart chunks a task walks at once, and how many of them the
-    /// hardware prefetchers have to follow.
+    const COL_GROUP: usize = 48;
+    /// The group size the fold runs with: columns per group, i.e. the unit the
+    /// schedule is built and the counters are accumulated over. A bigger group means
+    /// fewer schedules (less padding) and fewer `accumulate_pair` calls, against a
+    /// bigger plane buffer; measured on the target's class of machine, 48 columns
+    /// per group is the optimum, and 16 (the value the previous solver tuned on an
+    /// i7) is 4 % slower. The plane offsets are u16, which caps the group at 63.
     fn group_size() -> usize {
         static SIZE: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
         *SIZE.get_or_init(|| match std::env::var("LABINIUS_FOLD_GROUP") {
