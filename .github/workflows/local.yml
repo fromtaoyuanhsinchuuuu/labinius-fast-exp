@@ -60,10 +60,16 @@ jobs:
 
       - name: Setup
         shell: bash
+        env:
+          TRUSTED_CHECKOUT: ${{ github.workspace }}/.trusted-src
+          UNTRUSTED_CHECKOUT: ${{ github.workspace }}/.untrusted-src
         run: bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/setup.sh"
 
       - name: Benchmark
         shell: bash
+        env:
+          TRUSTED_CHECKOUT: ${{ github.workspace }}/.trusted-src
+          UNTRUSTED_CHECKOUT: ${{ github.workspace }}/.untrusted-src
         run: bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
 
       - name: Repeat
@@ -71,7 +77,7 @@ jobs:
         run: |
           for i in $(seq 1 ${{ inputs.runs }}); do
             echo "=== repeat $i ==="
-            bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
+            TRUSTED_CHECKOUT="$GITHUB_WORKSPACE/.trusted-src" UNTRUSTED_CHECKOUT="$GITHUB_WORKSPACE/.untrusted-src" bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
             cat "$GITHUB_WORKSPACE/.trusted-src/.yukon/labinius-fast-score.json"
             echo
           done
