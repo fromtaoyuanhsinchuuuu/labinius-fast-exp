@@ -140,10 +140,11 @@ jobs:
           # Configurations, interleaved round by round so that a drifting runner
           # hits every configuration equally.
           CONFIGS=(
-            "LABINIUS_FOLD_PARTS=1"
-            "LABINIUS_FOLD_PARTS=2"
-            "LABINIUS_FOLD_PARTS=4"
-            "LABINIUS_FOLD_PARTS=8"
+            "LABINIUS_FOLD_GROUP=8"
+            "LABINIUS_FOLD_GROUP=12"
+            "LABINIUS_FOLD_GROUP=16"
+            "LABINIUS_FOLD_GROUP=24"
+            "LABINIUS_FOLD_GROUP=32"
           )
           REPS=${SWEEP_REPS:-5}
           for r in $(seq 1 "$REPS"); do
