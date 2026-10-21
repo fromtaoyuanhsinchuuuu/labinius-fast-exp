@@ -1,0 +1,35 @@
+[package]
+name = "labinius-pcs-challenge"
+version = "0.1.0"
+edition = "2021"
+
+# Independent workspace: the implementation can be replaced by a fresh checkout.
+[workspace]
+resolver = "2"
+
+[[bin]]
+name = "labinius-fast"
+path = "src/main.rs"
+
+[dependencies]
+labinius = { path = "../labinius/crates/pcs" }
+blake3 = "1.8"
+serde = { version = "1", features = ["derive"] }
+bincode = "1.3"
+
+# The build script precomputes the commitment key for the default modulus with the library's
+# own kernels, which exist for x86-64 only; on any other host it writes an empty key and the
+# prover builds the key at run time.
+[target.'cfg(target_arch = "x86_64")'.build-dependencies]
+labinius = { path = "../labinius/crates/pcs" }
+blake3 = "1.8"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+# The build script runs the library's kernels to precompute the key; compile them optimised.
+[profile.release.build-override]
+opt-level = 3
