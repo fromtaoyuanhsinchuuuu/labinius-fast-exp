@@ -16,6 +16,10 @@ on:
         required: false
         type: string
         default: "1"
+      reps:
+        required: false
+        type: string
+        default: "5"
 
 permissions:
   contents: read
@@ -131,6 +135,8 @@ jobs:
 
       - name: Sweep tunables
         shell: bash
+        env:
+          SWEEP_REPS: ${{ inputs.reps || '5' }}
         run: |
           set -euo pipefail
           T=$(mktemp -d)
