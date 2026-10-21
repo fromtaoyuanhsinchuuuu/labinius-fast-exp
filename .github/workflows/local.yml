@@ -84,6 +84,11 @@ jobs:
           grep -o -m1 -E 'avx512f|avx512bw|avx512vbmi|gfni|avx512vnni' /proc/cpuinfo | sort -u | tr '\n' ' '
           echo
           free -g | head -2
+          echo "--- rust native detection ---"
+          /opt/cargo/bin/rustc --version
+          /opt/cargo/bin/rustc --print cfg -C target-cpu=native | grep -E "avx512|gfni" | head -30
+          echo "--- gcc march=native ---"
+          /usr/bin/gcc-13 -march=native -dM -E - < /dev/null | grep -E "AVX512|GFNI" | head -20
 
       - name: Setup
         shell: bash
