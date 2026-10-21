@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   benchmark:
-    uses: Layr-Labs/labinius-fast-challenge/.github/workflows/benchmark-runner.yml@master
+    uses: Layr-Labs/labinius-fast-challenge/.github/workflows/benchmark.yml@master
     with:
       solution_repository: ${{ inputs.solution_repository || github.repository }}
       solution_ref: ${{ inputs.solution_ref || github.sha }}
