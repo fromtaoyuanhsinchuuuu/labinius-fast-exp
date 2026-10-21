@@ -73,6 +73,18 @@ jobs:
               | sudo tee /usr/bin/gcc-13 >/dev/null
             sudo chmod 755 /usr/bin/gcc-13
           fi
+          # Rust's `target-cpu=native` detection is flaky on this runner pool
+          # (some instances leave AVX-512 off even though /proc/cpuinfo reports
+          # it), which breaks the challenge's inline asm. Force the features the
+          # official Xeon 8488C runner would have enabled.
+          if ! grep -q LABINIUS_DEV_SHIM /opt/cargo/bin/rustc 2>/dev/null; then
+            real=$(ls -d /opt/rustup/toolchains/*/bin/rustc | head -1)
+            sudo mv /opt/cargo/bin/rustc /opt/cargo/bin/rustc.proxy
+            printf '%s\n' '#!/bin/sh' '# LABINIUS_DEV_SHIM' \
+              "exec $real -C target-feature=+avx512f,+avx512bw,+avx512vl,+avx512dq,+avx512cd,+avx512vbmi,+avx512vbmi2,+avx512vnni,+avx512bf16,+avx512bitalg,+avx512vpopcntdq,+gfni \"\$@\"" \
+              | sudo tee /opt/cargo/bin/rustc >/dev/null
+            sudo chmod 755 /opt/cargo/bin/rustc
+          fi
           /opt/cargo/bin/rustc --version
           /usr/bin/gcc-13 --version | head -1
           command -v bwrap
