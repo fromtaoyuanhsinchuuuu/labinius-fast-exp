@@ -50,6 +50,22 @@ jobs:
           submodules: false
           persist-credentials: false
 
+      - name: Install runner prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential gcc-13 bubblewrap python3 openssl libssl-dev pkg-config curl ca-certificates git
+          if [ ! -x /opt/cargo/bin/rustc ]; then
+            curl --proto '=https' --tlsv1.2 -fsS https://sh.rustup.rs -o /tmp/rustup.sh
+            sudo env CARGO_HOME=/opt/cargo RUSTUP_HOME=/opt/rustup sh /tmp/rustup.sh \
+              -y --profile minimal --default-toolchain stable --no-modify-path
+            rm -f /tmp/rustup.sh
+          fi
+          /opt/cargo/bin/rustc --version
+          /usr/bin/gcc-13 --version | head -1
+          command -v bwrap
+
       - name: Show machine
         run: |
           awk -F: '/^model name/ {print $2; exit}' /proc/cpuinfo
