@@ -62,6 +62,21 @@ jobs:
               -y --profile minimal --default-toolchain stable --no-modify-path
             rm -f /tmp/rustup.sh
           fi
+          # gcc-13 does not know this runner's Zen 4 CPU, so `-march=native` leaves
+          # AVX-512 off and the challenge's C sources fail to compile. The official
+          # Xeon 8488C runner has the same gcc, so this shim only restores the
+          # feature set the C code needs.
+          if ! grep -q LABINIUS_DEV_SHIM /usr/bin/gcc-13 2>/dev/null; then
+            sudo mv /usr/bin/gcc-13 /usr/bin/gcc-13.real
+            sudo tee /usr/bin/gcc-13 >/dev/null <<'SHIM'
+#!/bin/sh
+# LABINIUS_DEV_SHIM
+exec /usr/bin/gcc-13.real \
+  -mavx512f -mavx512bw -mavx512vl -mavx512dq -mavx512cd \
+  -mavx512vbmi -mavx512vbmi2 -mavx512vnni -mavx512bf16 "$@"
+SHIM
+            sudo chmod 755 /usr/bin/gcc-13
+          fi
           /opt/cargo/bin/rustc --version
           /usr/bin/gcc-13 --version | head -1
           command -v bwrap
