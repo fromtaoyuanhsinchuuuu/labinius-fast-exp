@@ -362,6 +362,14 @@ mod huge {
 #[global_allocator]
 static ALLOC: huge::Alloc = huge::Alloc;
 
+/// Whether the witness table's mapping asks for huge pages.
+fn table_huge_pages() -> bool {
+    match std::env::var("LABINIUS_TABLE_HUGE") {
+        Ok(v) => v != "0",
+        Err(_) => true,
+    }
+}
+
 /// The harness witness table: `(1 << LOG_VARS) / 8` BLAKE3 XOF bytes, each 16 little-endian
 /// bytes one GHASH word. The timed prover does not recompute it, and does not copy it either: on
 /// Linux the file is mapped read-only and the mapping is read as the `B128` words it is (`B128`
@@ -404,7 +412,9 @@ impl Table {
                 // The table is read in 8 KB chunks at a 256 KB stride by the fold and
                 // in 2 KB chunks by the commitment: a page-table walk per chunk
                 // otherwise. Ask for huge pages; the kernel may refuse.
-                unsafe { sys::madvise(ptr, Self::BYTES, sys::MADV_HUGEPAGE) };
+                if table_huge_pages() {
+                    unsafe { sys::madvise(ptr, Self::BYTES, sys::MADV_HUGEPAGE) };
+                }
                 return Table::Mapped {
                     ptr: ptr as *const B128,
                     bytes: Self::BYTES,

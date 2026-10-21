@@ -397,6 +397,15 @@ unsafe fn clear_lanes(b:&mut Batch32,from:usize) {
  let m=!((1u64<<from)-1) as u32;
  for j in 0..N {_mm512_mask_storeu_epi16(b.v[j].as_mut_ptr(),m,_mm512_setzero_si512());}
 }
+/// Whether the commitment prefetches the witness: the knob is read once per group.
+fn prefetch_witness_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| match std::env::var("LABINIUS_PREFETCH_WITNESS") {
+        Ok(v) => v != "0",
+        Err(_) => true,
+    })
+}
+
 /// Bring `bytes` of the witness table into the cache: the commitment reads it in 2 KB
 /// chunks whose neighbours are 256 KB away, a pattern the hardware prefetchers do not
 /// follow across pages.
@@ -431,9 +440,11 @@ unsafe fn group<F:FnMut(usize)>(cols:&[&[B128]],keys:&[KeyBatch],nb:usize,ws:&mu
    // from the same chunk of the neighbouring column, and advances by 2 KB only
    // after a whole group of columns has been transformed. Touch the chunks that
    // come next while this one is read and transformed.
-   prefetch_witness(cols[c].as_ptr().add(128*b),2048);
-   if b+1<nb {prefetch_witness(cols[c].as_ptr().add(128*(b+1)),2048);}
-   if c+1<g {prefetch_witness(cols[c+1].as_ptr().add(128*b),2048);}
+   if prefetch_witness_on() {
+    prefetch_witness(cols[c].as_ptr().add(128*b),2048);
+    if b+1<nb {prefetch_witness(cols[c].as_ptr().add(128*(b+1)),2048);}
+    if c+1<g {prefetch_witness(cols[c+1].as_ptr().add(128*b),2048);}
+   }
    cols[c].slice_batch(b,&mut ws.idx[0]);
    let a0=ws.acc[2*c].v.as_mut_ptr() as *mut i32;let a1=ws.acc[2*c+1].v.as_mut_ptr() as *mut i32;
    sink_batch::<P0>(&ws.idx[0],keys,b,a0);
