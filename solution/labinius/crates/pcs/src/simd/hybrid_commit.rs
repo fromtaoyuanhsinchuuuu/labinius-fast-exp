@@ -397,6 +397,31 @@ unsafe fn clear_lanes(b:&mut Batch32,from:usize) {
  let m=!((1u64<<from)-1) as u32;
  for j in 0..N {_mm512_mask_storeu_epi16(b.v[j].as_mut_ptr(),m,_mm512_setzero_si512());}
 }
+/// Whether the commitment prefetches the witness: the knob is read once per group.
+fn prefetch_witness_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| match std::env::var("LABINIUS_PREFETCH_WITNESS") {
+        Ok(v) => v != "0",
+        Err(_) => true,
+    })
+}
+
+/// Bring the first line of every page of `bytes` of the witness table into the cache: the
+/// commitment reads it in 2 KB chunks whose neighbours are 256 KB away, a pattern the
+/// hardware prefetchers do not follow across pages. Only the page starts are touched: the
+/// L2 streamer picks up the rest of a page after the first miss, and prefetching every line
+/// of every chunk costs more instructions than the misses it saves.
+#[inline(always)]
+fn prefetch_witness(ptr:*const crate::fields::scalar::B128,bytes:usize){
+ #[cfg(target_arch="x86_64")]
+ unsafe{
+  use core::arch::x86_64::*;
+  let base=ptr as *const i8;
+  let mut off=0usize;
+  while off<bytes{_mm_prefetch::<{_MM_HINT_T0}>(base.add(off));off+=4096;}
+ }
+}
+
 /// One group of `g` columns: the batch is the outer loop, so each key batch is read from L3 once
 /// per group and `g` times from L2. A finished tail chunk of column `c` goes to lane `s g + c`
 /// of the pending pair, `s` the chunk's slot; the pair is inverse transformed and CRT-combined
@@ -412,6 +437,14 @@ unsafe fn group<F:FnMut(usize)>(cols:&[&[B128]],keys:&[KeyBatch],nb:usize,ws:&mu
  let mut filled=0usize;
  for b in 0..nb {
   for c in 0..g {
+   // The witness is the commitment's only DRAM traffic, and the hardware
+   // prefetchers do not follow it: a batch's 2 KB chunk of a column sits 256 KB
+   // from the same chunk of the neighbouring column, and advances by 2 KB only
+   // after a whole group of columns has been transformed. Touch the page starts
+   // of the next column's chunk while this one is read and transformed.
+   if prefetch_witness_on() && c+1<g {
+    prefetch_witness(cols[c+1].as_ptr().add(128*b),2048);
+   }
    cols[c].slice_batch(b,&mut ws.idx[0]);
    let a0=ws.acc[2*c].v.as_mut_ptr() as *mut i32;let a1=ws.acc[2*c+1].v.as_mut_ptr() as *mut i32;
    sink_batch::<P0>(&ws.idx[0],keys,b,a0);

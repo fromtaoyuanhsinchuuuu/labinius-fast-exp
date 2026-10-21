@@ -2002,10 +2002,10 @@ mod bitsliced {
         // shared core does fewer of them; the second part of a block to finish adds its counts
         // to the first's (counts are additive and stay within the total weight) and writes.
         // Parts of the column groups a block is split over. A part is one task's
-        // sweep over the table: the fewer columns a task touches at once, the
-        // fewer distinct 4 KB pages it has in flight, and the second-level TLB
-        // has 2048 entries. More parts cost a merge of the parts' counters.
-        const PARTS: usize = 4;
+        // sweep over the table. Two parts balance the sweep against the merge
+        // of the parts' counters: one part leaves a task touching 2048 distinct
+        // 4 KB pages at once, and four parts pay for their merge.
+        const PARTS: usize = 2;
         let parts = match std::env::var("LABINIUS_FOLD_PARTS") {
             Ok(v) => v.parse::<usize>().unwrap_or(PARTS),
             Err(_) => PARTS,
