@@ -366,7 +366,7 @@ static ALLOC: huge::Alloc = huge::Alloc;
 fn table_huge_pages() -> bool {
     match std::env::var("LABINIUS_TABLE_HUGE") {
         Ok(v) => v != "0",
-        Err(_) => false,
+        Err(_) => true,
     }
 }
 
@@ -411,7 +411,10 @@ impl Table {
             if ptr as isize != -1 && !ptr.is_null() && (ptr as usize) % 16 == 0 {
                 // The table is read in 8 KB chunks at a 256 KB stride by the fold and
                 // in 2 KB chunks by the commitment: a page-table walk per chunk
-                // otherwise. Ask for huge pages; the kernel may refuse.
+                // otherwise, and the fold's sweep touches 2048 distinct 4 KB pages
+                // at once, which is the whole second-level TLB. Ask for huge
+                // pages; the kernel may refuse, and the fallback is the same
+                // mapping it would have used.
                 if table_huge_pages() {
                     unsafe { sys::madvise(ptr, Self::BYTES, sys::MADV_HUGEPAGE) };
                 }

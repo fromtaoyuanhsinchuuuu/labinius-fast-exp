@@ -91,6 +91,8 @@ jobs:
           echo
           echo
           df -T "$RUNNER_TEMP" | tail -1
+          grep -E " / | /var| /tmp " /proc/mounts | head -5
+          grep -i huge /proc/meminfo | head -4
           cat > /tmp/avx512probe.c <<'PROBE'
           #include <immintrin.h>
           #include <stdio.h>
