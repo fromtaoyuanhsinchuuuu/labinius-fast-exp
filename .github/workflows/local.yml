@@ -85,6 +85,10 @@ jobs:
           grep -o -m1 -E 'avx512f|avx512bw|avx512vbmi|gfni' /proc/cpuinfo | sort -u | tr '\n' ' '
           echo
           free -g | head -2
+          echo "--- topology ---"
+          lscpu | grep -E "Thread|Core|Socket|Model name" || true
+          cat /sys/devices/system/cpu/cpu*/topology/thread_siblings_list 2>/dev/null | sort -u | tr '\n' ' ' || true
+          echo
           df -T "$RUNNER_TEMP" | tail -1
           cat > /tmp/avx512probe.c <<'PROBE'
           #include <immintrin.h>
@@ -133,14 +137,12 @@ jobs:
           # Configurations, interleaved round by round so that a drifting runner
           # hits every configuration equally.
           CONFIGS=(
-            "LABINIUS_PREFETCH_WITNESS=0 LABINIUS_TABLE_HUGE=0 LABINIUS_HYBRID_GROUP=16 LABINIUS_FOLD_PARTS=2"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_TABLE_HUGE=0 LABINIUS_HYBRID_GROUP=16 LABINIUS_FOLD_PARTS=2"
-            "LABINIUS_PREFETCH_WITNESS=0 LABINIUS_TABLE_HUGE=1 LABINIUS_HYBRID_GROUP=16 LABINIUS_FOLD_PARTS=2"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_TABLE_HUGE=1 LABINIUS_HYBRID_GROUP=16 LABINIUS_FOLD_PARTS=2"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_TABLE_HUGE=1 LABINIUS_HYBRID_GROUP=8 LABINIUS_FOLD_PARTS=2"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_TABLE_HUGE=1 LABINIUS_HYBRID_GROUP=32 LABINIUS_FOLD_PARTS=2"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_TABLE_HUGE=1 LABINIUS_HYBRID_GROUP=16 LABINIUS_FOLD_PARTS=1"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_TABLE_HUGE=1 LABINIUS_HYBRID_GROUP=16 LABINIUS_FOLD_PARTS=4"
+            "LABINIUS_PREFETCH_WITNESS=0 LABINIUS_HYBRID_GROUP=16"
+            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=16"
+            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=32"
+            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=48"
+            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=64"
+            "LABINIUS_PREFETCH_WITNESS=0 LABINIUS_HYBRID_GROUP=32"
           )
           REPS=${SWEEP_REPS:-5}
           for r in $(seq 1 "$REPS"); do

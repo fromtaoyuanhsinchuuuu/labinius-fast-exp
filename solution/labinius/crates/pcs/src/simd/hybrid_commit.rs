@@ -947,7 +947,7 @@ mod reference {
   columns:&[&[B128]],workers:usize,group_size:usize,
  )->Vec<[u32;N]> {
   let nb=base.row(0).len();let bk=[base.row(0),base.row(1)];let tk=[tail.row(0),tail.row(1)];
-  let g=group_size.clamp(1,32).min(columns.len());
+  let g=group_size.clamp(1,64).min(columns.len());
   let groups=columns.len().div_ceil(g);let workers=workers.clamp(1,groups);
   let mut rows=vec![[0u32;N];columns.len()*3];let dst=rows.as_mut_ptr() as usize;
   let next=std::sync::atomic::AtomicUsize::new(0);
