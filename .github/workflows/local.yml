@@ -66,6 +66,12 @@ jobs:
               | sudo tee /usr/bin/gcc-13 >/dev/null
             sudo chmod 755 /usr/bin/gcc-13
           fi
+          # The challenge's sandbox (bubblewrap) needs unprivileged user namespaces,
+          # which the runner image restricts.
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 || true
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w vm.max_map_count=1048576 || true
           /opt/cargo/bin/rustc --version
           /usr/bin/gcc-13 --version | head -1
           command -v bwrap
