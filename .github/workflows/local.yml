@@ -1,9 +1,8 @@
 name: Local bench
 
 # Development rig: runs the challenge's own protected setup/benchmark scripts
-# unmodified on a GitHub-hosted x86-64 runner with the same 8-vCPU (4 physical
-# core + HT) topology as the official Xeon 8488C runner. Official numbers come
-# from `yukon submit` on the protected runner group; this is for A/B only.
+# unmodified on a GitHub-hosted x86-64 runner. Official numbers come from
+# `yukon submit` on the protected Xeon 8488C runner group; this is for A/B only.
 on:
   workflow_dispatch:
     inputs:
@@ -17,10 +16,6 @@ on:
         required: false
         type: string
         default: "1"
-      label:
-        required: false
-        type: string
-        default: "ubuntu-24.04-8-cores"
 
 permissions:
   contents: read
@@ -28,7 +23,7 @@ permissions:
 
 jobs:
   bench:
-    runs-on: ${{ inputs.label }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout trusted harness
@@ -63,9 +58,7 @@ jobs:
             rm -f /tmp/rustup.sh
           fi
           # gcc-13 does not know this runner's Zen 4 CPU, so `-march=native` leaves
-          # AVX-512 off and the challenge's C sources fail to compile. The official
-          # Xeon 8488C runner has the same gcc, so this shim only restores the
-          # feature set the C code needs.
+          # AVX-512 off and the challenge's C sources fail to compile.
           if ! grep -q LABINIUS_DEV_SHIM /usr/bin/gcc-13 2>/dev/null; then
             sudo mv /usr/bin/gcc-13 /usr/bin/gcc-13.real
             printf '%s\n' '#!/bin/sh' '# LABINIUS_DEV_SHIM' \
@@ -73,34 +66,47 @@ jobs:
               | sudo tee /usr/bin/gcc-13 >/dev/null
             sudo chmod 755 /usr/bin/gcc-13
           fi
-          # Rust's `target-cpu=native` detection is flaky on this runner pool
-          # (some instances leave AVX-512 off even though /proc/cpuinfo reports
-          # it), which breaks the challenge's inline asm. Force the features the
-          # official Xeon 8488C runner would have enabled.
-          if ! grep -q LABINIUS_DEV_SHIM /opt/cargo/bin/rustc 2>/dev/null; then
-            real=$(ls -d /opt/rustup/toolchains/*/bin/rustc | head -1)
-            sudo mv /opt/cargo/bin/rustc /opt/cargo/bin/rustc.proxy
-            printf '%s\n' '#!/bin/sh' '# LABINIUS_DEV_SHIM' \
-              "exec $real -C target-feature=+avx512f,+avx512bw,+avx512vl,+avx512dq,+avx512cd,+avx512vbmi,+avx512vbmi2,+avx512vnni,+avx512bf16,+avx512bitalg,+avx512vpopcntdq,+gfni \"\$@\"" \
-              | sudo tee /opt/cargo/bin/rustc >/dev/null
-            sudo chmod 755 /opt/cargo/bin/rustc
-          fi
           /opt/cargo/bin/rustc --version
           /usr/bin/gcc-13 --version | head -1
           command -v bwrap
 
-      - name: Show machine
+      - name: Probe AVX-512 execution
+        shell: bash
         run: |
+          set -euo pipefail
           awk -F: '/^model name/ {print $2; exit}' /proc/cpuinfo
           nproc
-          grep -o -m1 -E 'avx512f|avx512bw|avx512vbmi|gfni|avx512vnni' /proc/cpuinfo | sort -u | tr '\n' ' '
+          grep -o -m1 -E 'avx512f|avx512bw|avx512vbmi|gfni' /proc/cpuinfo | sort -u | tr '\n' ' '
           echo
           free -g | head -2
-          echo "--- rust native detection ---"
-          /opt/cargo/bin/rustc --version
-          /opt/cargo/bin/rustc --print cfg -C target-cpu=native | grep -E "avx512|gfni" | head -30
-          echo "--- gcc march=native ---"
-          /usr/bin/gcc-13 -march=native -dM -E - < /dev/null | grep -E "AVX512|GFNI" | head -20
+          df -T "$RUNNER_TEMP" | tail -1
+          cat > /tmp/avx512probe.c <<'PROBE'
+          #include <immintrin.h>
+          #include <stdio.h>
+          int main(void) {
+            __m512i a = _mm512_set1_epi32(7);
+            __m512i b = _mm512_add_epi32(a, a);
+            int out[16];
+            _mm512_storeu_si512(out, b);
+            printf("avx512-ok %d\n", out[0]);
+            return 0;
+          }
+          PROBE
+          gcc -mavx512f -O2 -o /tmp/avx512probe /tmp/avx512probe.c
+          /tmp/avx512probe
+          # Rust's `target-cpu=native` detection is flaky on this runner pool: some
+          # instances leave AVX-512 off even though /proc/cpuinfo reports it, which
+          # breaks the challenge's inline asm. Force the feature set the official
+          # Xeon 8488C runner would have enabled.
+          if ! grep -q LABINIUS_DEV_SHIM /opt/cargo/bin/rustc 2>/dev/null; then
+            real=$(ls -d /opt/rustup/toolchains/*/bin/rustc | head -1)
+            sudo mv /opt/cargo/bin/rustc /opt/cargo/bin/rustc.proxy
+            printf '%s\n' '#!/bin/sh' '# LABINIUS_DEV_SHIM' \
+              "exec $real -C target-cpu=native -C target-feature=+avx512f,+avx512bw,+avx512vl,+avx512dq,+avx512cd,+avx512vbmi,+avx512vbmi2,+avx512vnni,+avx512bf16,+avx512bitalg,+avx512vpopcntdq,+gfni \"\$@\"" \
+              | sudo tee /opt/cargo/bin/rustc >/dev/null
+            sudo chmod 755 /opt/cargo/bin/rustc
+          fi
+          /opt/cargo/bin/rustc --print cfg -C target-cpu=native | grep -c avx512f
 
       - name: Setup
         shell: bash
@@ -114,14 +120,10 @@ jobs:
         env:
           TRUSTED_CHECKOUT: ${{ github.workspace }}/.trusted-src
           UNTRUSTED_CHECKOUT: ${{ github.workspace }}/.untrusted-src
-        run: bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
-
-      - name: Repeat
-        shell: bash
         run: |
           for i in $(seq 1 ${{ inputs.runs }}); do
             echo "=== repeat $i ==="
-            TRUSTED_CHECKOUT="$GITHUB_WORKSPACE/.trusted-src" UNTRUSTED_CHECKOUT="$GITHUB_WORKSPACE/.untrusted-src" bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
+            bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
             cat "$GITHUB_WORKSPACE/.trusted-src/.yukon/labinius-fast-score.json"
             echo
           done
