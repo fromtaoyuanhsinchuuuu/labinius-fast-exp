@@ -68,13 +68,9 @@ jobs:
           # feature set the C code needs.
           if ! grep -q LABINIUS_DEV_SHIM /usr/bin/gcc-13 2>/dev/null; then
             sudo mv /usr/bin/gcc-13 /usr/bin/gcc-13.real
-            sudo tee /usr/bin/gcc-13 >/dev/null <<'SHIM'
-#!/bin/sh
-# LABINIUS_DEV_SHIM
-exec /usr/bin/gcc-13.real \
-  -mavx512f -mavx512bw -mavx512vl -mavx512dq -mavx512cd \
-  -mavx512vbmi -mavx512vbmi2 -mavx512vnni -mavx512bf16 "$@"
-SHIM
+            printf '%s\n' '#!/bin/sh' '# LABINIUS_DEV_SHIM' \
+              'exec /usr/bin/gcc-13.real -mavx512f -mavx512bw -mavx512vl -mavx512dq -mavx512cd -mavx512vbmi -mavx512vbmi2 -mavx512vnni -mavx512bf16 "$@"' \
+              | sudo tee /usr/bin/gcc-13 >/dev/null
             sudo chmod 755 /usr/bin/gcc-13
           fi
           /opt/cargo/bin/rustc --version
