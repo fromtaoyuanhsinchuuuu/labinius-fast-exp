@@ -1,0 +1,85 @@
+name: Local bench
+
+# Development rig: runs the challenge's own protected setup/benchmark scripts
+# unmodified on a GitHub-hosted x86-64 runner with the same 8-vCPU (4 physical
+# core + HT) topology as the official Xeon 8488C runner. Official numbers come
+# from `yukon submit` on the protected runner group; this is for A/B only.
+on:
+  workflow_dispatch:
+    inputs:
+      solution_repository:
+        required: false
+        type: string
+      solution_ref:
+        required: false
+        type: string
+      runs:
+        required: false
+        type: string
+        default: "1"
+      label:
+        required: false
+        type: string
+        default: "ubuntu-24.04-8-cores"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  bench:
+    runs-on: ${{ inputs.label }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout trusted harness
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: Layr-Labs/labinius-fast-challenge
+          ref: master
+          path: .trusted-src
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Checkout untrusted solution input
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: ${{ inputs.solution_repository || github.repository }}
+          ref: ${{ inputs.solution_ref || github.sha }}
+          path: .untrusted-src
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Show machine
+        run: |
+          awk -F: '/^model name/ {print $2; exit}' /proc/cpuinfo
+          nproc
+          grep -o -m1 -E 'avx512f|avx512bw|avx512vbmi|gfni|avx512vnni' /proc/cpuinfo | sort -u | tr '\n' ' '
+          echo
+          free -g | head -2
+
+      - name: Setup
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/setup.sh"
+
+      - name: Benchmark
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
+
+      - name: Repeat
+        shell: bash
+        run: |
+          for i in $(seq 1 ${{ inputs.runs }}); do
+            echo "=== repeat $i ==="
+            bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/benchmark.sh"
+            cat "$GITHUB_WORKSPACE/.trusted-src/.yukon/labinius-fast-score.json"
+            echo
+          done
+
+      - name: Upload score
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: benchmark-score
+          path: ${{ github.workspace }}/.trusted-src/.yukon/labinius-fast-score.json
+          if-no-files-found: error
