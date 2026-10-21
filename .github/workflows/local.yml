@@ -121,6 +121,35 @@ jobs:
           UNTRUSTED_CHECKOUT: ${{ github.workspace }}/.untrusted-src
         run: bash "$GITHUB_WORKSPACE/.trusted-src/.yukon/setup.sh"
 
+
+      - name: Sweep tunables
+        shell: bash
+        run: |
+          set -euo pipefail
+          T=$(mktemp -d)
+          export LABINIUS_SEED=$(openssl rand -hex 32)
+          "$RUNNER_TEMP/labinius-trusted/labinius-fast-verify" --write-table "$T/table.bin"
+          PROVER="$RUNNER_TEMP/labinius-contestant/solution/proof_generate/target/release/labinius-fast"
+          run_one() {
+            local reps=$1; shift
+            for i in $(seq 1 "$reps"); do
+              env "$@" "$PROVER" --prove "$T/proof.bin" --table "$T/table.bin" 2>&1 \
+                | grep -a "labinius-profile" | tail -1
+            done
+          }
+          echo "=== baseline (no knobs) ==="
+          run_one 3 LABINIUS_X=1
+          for g in 8 16 24 32; do
+            echo "=== hybrid_group=$g ==="
+            run_one 3 LABINIUS_HYBRID_GROUP=$g
+          done
+          for p in 1 2 4; do
+            echo "=== fold_parts=$p ==="
+            run_one 3 LABINIUS_FOLD_PARTS=$p
+          done
+          echo "=== hybrid_group=8 fold_parts=1 ==="
+          run_one 3 LABINIUS_HYBRID_GROUP=8 LABINIUS_FOLD_PARTS=1
+
       - name: Benchmark
         shell: bash
         env:

@@ -2059,17 +2059,23 @@ mod bitsliced {
                         );
                     }
                 }
-                for s in 0..SLOTS {
-                    unslice(acc.as_ptr().add(s * BITS), &mut counts[s]);
-                }
                 if parts == 1 {
+                    // The task owns the whole block: it reads the counters into
+                    // its own buffer and writes them straight out.
+                    for s in 0..SLOTS {
+                        unslice(acc.as_ptr().add(s * BITS), &mut counts[s]);
+                    }
                     let output = (out_addr as *mut RingElement).add(block * (LANES / 4));
                     write_counts(&counts, bias, output);
                     continue;
                 }
+                let mut own = vec![[0i16; LANES]; SLOTS];
+                for s in 0..SLOTS {
+                    unslice(acc.as_ptr().add(s * BITS), &mut own[s]);
+                }
                 let mut done = {
                     let mut v = pending[block].lock().unwrap();
-                    v.push(std::mem::take(&mut counts));
+                    v.push(own);
                     if v.len() < parts {
                         continue;
                     }
