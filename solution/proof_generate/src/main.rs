@@ -366,7 +366,7 @@ static ALLOC: huge::Alloc = huge::Alloc;
 fn table_huge_pages() -> bool {
     match std::env::var("LABINIUS_TABLE_HUGE") {
         Ok(v) => v != "0",
-        Err(_) => true,
+        Err(_) => false,
     }
 }
 

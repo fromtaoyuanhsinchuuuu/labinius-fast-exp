@@ -140,12 +140,10 @@ jobs:
           # Configurations, interleaved round by round so that a drifting runner
           # hits every configuration equally.
           CONFIGS=(
-            "LABINIUS_PREFETCH_WITNESS=0 LABINIUS_HYBRID_GROUP=16"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=16"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=32"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=48"
-            "LABINIUS_PREFETCH_WITNESS=1 LABINIUS_HYBRID_GROUP=64"
-            "LABINIUS_PREFETCH_WITNESS=0 LABINIUS_HYBRID_GROUP=32"
+            "LABINIUS_FOLD_PARTS=1"
+            "LABINIUS_FOLD_PARTS=2"
+            "LABINIUS_FOLD_PARTS=4"
+            "LABINIUS_FOLD_PARTS=8"
           )
           REPS=${SWEEP_REPS:-5}
           for r in $(seq 1 "$REPS"); do
